@@ -12,6 +12,7 @@
 """
 from __future__ import annotations
 import argparse
+import sys
 
 from data.finmind import load
 from run import load_env
@@ -81,15 +82,20 @@ def main():
 
     tickers = [t.strip() for t in args.tickers.split(",") if t.strip()]
     found = []
+    failed = []
     for t in tickers:
         try:
             df = load(t, args.start, None)
-            r = score(df, args.max_pctile)
-            if r and r["score"] >= args.min_score:
-                r["ticker"] = t
-                found.append(r)
-        except Exception:
+        except Exception as e:
+            failed.append(t)
+            print(f"  略過 {t}：{e}")
             continue
+        r = score(df, args.max_pctile)
+        if r and r["score"] >= args.min_score:
+            r["ticker"] = t
+            found.append(r)
+    if len(failed) == len(tickers):
+        sys.exit("所有標的資料皆載入失敗")
 
     found.sort(key=lambda x: x["score"], reverse=True)
     found = found[: args.top]
@@ -113,7 +119,7 @@ def main():
             send_line("\n".join(lines))
             print("\n已推 LINE")
         except Exception as e:
-            print(f"\nLINE 推播失敗：{e}")
+            sys.exit(f"LINE 推播失敗：{e}")
 
     print("\n⚠️ 僅為規則型初篩，仍需搭配基本面/財報自行判斷。")
 

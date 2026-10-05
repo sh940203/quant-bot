@@ -17,4 +17,5 @@ jobs:
       - run: python discover.py --line
         env:
           LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}

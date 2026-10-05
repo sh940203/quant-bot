@@ -2,11 +2,14 @@
 供兆豐（或任何券商）app 手動下單使用——機器人決策、你的手下單。
 
 範例：
-    python signal.py --strategy breakout
-    python signal.py --strategy foreign_streak --tickers 2330,2454,3711 --no-line
+    python alert.py --strategy breakout
+    python alert.py --strategy foreign_streak --tickers 2330,2454,3711 --no-line
+
+推播或資料全數失敗時以非 0 結束碼離開，讓 GitHub Actions 顯示失敗。
 """
 from __future__ import annotations
 import argparse
+import sys
 
 from data.finmind import load
 from strategies import REGISTRY
@@ -68,12 +71,14 @@ def main():
     msg = "\n".join(lines)
 
     print("\n" + msg + "\n")
+    if trade_date is None:
+        sys.exit("所有標的資料皆載入失敗，不推播")
     if not args.no_line:
         try:
-            r = send_line(msg)
-            print("已推 LINE" if r.get("ok") else "未設定 LINE token，略過推播")
+            send_line(msg)
+            print("已推 LINE")
         except Exception as e:
-            print(f"LINE 推播失敗：{e}")
+            sys.exit(f"LINE 推播失敗：{e}")
 
 
 if __name__ == "__main__":
