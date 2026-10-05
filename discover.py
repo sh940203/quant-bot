@@ -17,6 +17,7 @@ import sys
 from data.finmind import load
 from run import load_env
 from notify import send_line
+from names import label
 
 # 預設掃描宇宙（台股中大型科技/半導體，價位分布廣）
 DEFAULT_UNIVERSE = [
@@ -25,48 +26,78 @@ DEFAULT_UNIVERSE = [
     "3105", "2401", "6239", "3532", "2451", "2049", "1590", "3037", "3017", "6488",
 ]
 
-NAME_MAP = {
-    "2303": "聯電", "2379": "瑞昱", "3034": "聯詠", "3711": "日月光", "3661": "世芯-KY",
-    "3035": "智原", "3443": "創意", "6415": "矽力-KY", "2408": "南亞科", "2344": "華邦電",
-    "2337": "旺宏", "4919": "新唐", "5269": "祥碩", "3529": "力旺", "3006": "晶豪科",
-    "3016": "嘉晶", "8016": "矽創", "3260": "威剛", "6147": "頎邦", "4961": "天鈺",
-    "3105": "穩懋", "2401": "凌陽", "6239": "力成", "3532": "台勝科", "2451": "創見",
-    "2049": "上銀", "1590": "亞德客-KY", "3037": "欣興", "3017": "奇鋐", "6488": "環球晶",
-}
-
-
 LOOKBACK = 252  # 位階區間：滾動 252 個交易日（約一年）
+MAX_SCORE = 6
 
 
-def score(df, max_pctile: float = 0.5):
+def score_detail(df, max_pctile: float = 0.5):
+    """完整評分明細（數值皆未四捨五入）。資料不足 120 日回傳 None。
+
+    未達位階門檻（pctile >= max_pctile）的股票也會回傳明細，eligible=False、score=None，
+    並附 excluded_reason，讓 AI 能解釋「為什麼沒上榜」。
+    """
     close = df["close"].tail(LOOKBACK)
     if len(close) < 120:
         return None
     px = float(close.iloc[-1])
     lo, hi = float(close.min()), float(close.max())
     pctile = (px - lo) / (hi - lo) if hi > lo else 1.0
-    # 硬門檻：必須是「低價」（位階在一年區間低檔）才納入
-    if pctile >= max_pctile:
-        return None
     sma20 = close.rolling(20).mean()
-    above20 = px > float(sma20.iloc[-1])
-    turning = float(sma20.iloc[-1]) > float(sma20.iloc[-6])
+    sma20_now, sma20_prev = float(sma20.iloc[-1]), float(sma20.iloc[-6])
+    above20 = px > sma20_now
+    turning = sma20_now > sma20_prev
     foreign20 = float(df["foreign"].tail(20).sum())
+    # 硬門檻：必須是「低價」（位階在一年區間低檔）才納入
+    eligible = pctile < max_pctile
 
-    s = 0
-    reasons = []
-    if pctile < 0.35:
-        s += 2; reasons.append(f"位階低（一年區間{pctile*100:.1f}%）")
+    if not eligible:
+        pos_pts, pos_text = 0, f"位階{pctile*100:.1f}%，未低於門檻{max_pctile*100:.0f}%（不列入）"
+    elif pctile < 0.35:
+        pos_pts, pos_text = 2, f"位階低（一年區間{pctile*100:.1f}%）"
     else:
-        s += 1; reasons.append(f"位階偏低（{pctile*100:.1f}%）")
+        pos_pts, pos_text = 1, f"位階偏低（{pctile*100:.1f}%）"
     if foreign20 > 0:
-        s += 2; reasons.append(f"外資近20日買超+{foreign20:,.0f}張")
+        f_pts, f_text = 2, f"外資近20日買超+{foreign20:,.0f}張"
+    else:
+        f_pts, f_text = 0, f"外資近20日賣超{foreign20:,.0f}張" if foreign20 < 0 else "外資近20日買賣超為0"
     if above20 and turning:
-        s += 2; reasons.append("站上20MA且均線翻揚(止跌)")
+        t_pts, t_text = 2, "站上20MA且均線翻揚(止跌)"
     elif above20:
-        s += 1; reasons.append("站上20MA")
-    return {"close": round(px, 2), "pctile": round(pctile * 100, 1), "foreign20": round(foreign20),
-            "score": s, "reasons": reasons}
+        t_pts, t_text = 1, "站上20MA"
+    else:
+        t_pts, t_text = 0, "未站上20MA"
+
+    breakdown = [
+        {"key": "position", "points": pos_pts, "max": 2,
+         "value": {"pctile": pctile, "close": px, "low": lo, "high": hi},
+         "rule": f"位階<35% 得2分、35%~{max_pctile*100:.0f}% 得1分、≥{max_pctile*100:.0f}% 不列入",
+         "display": pos_text},
+        {"key": "foreign_flow", "points": f_pts, "max": 2,
+         "value": {"foreign20": foreign20},
+         "rule": "外資近20日累計買超>0 得2分", "display": f_text},
+        {"key": "stop_falling", "points": t_pts, "max": 2,
+         "value": {"close": px, "sma20": sma20_now, "sma20_5d_ago": sma20_prev,
+                   "above_sma20": above20, "sma20_rising": turning},
+         "rule": "收盤站上20MA且20MA高於5日前得2分；只站上20MA得1分", "display": t_text},
+    ]
+    total = sum(b["points"] for b in breakdown)
+    return {
+        "close": px, "pctile": pctile, "foreign20": foreign20,
+        "eligible": eligible,
+        "excluded_reason": None if eligible else pos_text,
+        "score": total if eligible else None,
+        "max_score": MAX_SCORE,
+        "breakdown": breakdown,
+    }
+
+
+def score(df, max_pctile: float = 0.5):
+    d = score_detail(df, max_pctile)
+    if d is None or not d["eligible"]:
+        return None
+    return {"close": round(d["close"], 2), "pctile": round(d["pctile"] * 100, 1),
+            "foreign20": round(d["foreign20"]), "score": d["score"],
+            "reasons": [b["display"] for b in d["breakdown"] if b["points"] > 0]}
 
 
 def main():
@@ -100,20 +131,17 @@ def main():
     found.sort(key=lambda x: x["score"], reverse=True)
     found = found[: args.top]
 
-    def nm(t):
-        return f"{t} {NAME_MAP[t]}" if t in NAME_MAP else t
-
     print(f"\n發掘低價潛力股（分數≥{args.min_score}，掃 {len(tickers)} 檔）\n")
     if not found:
         print("本次無符合標的。")
     for r in found:
-        print(f"[{r['score']}分] {nm(r['ticker'])}  收{r['close']}  位階{r['pctile']}%")
+        print(f"[{r['score']}分] {label(r['ticker'])}  收{r['close']}  位階{r['pctile']}%")
         print("     " + "、".join(r["reasons"]))
 
     if args.line and found:
         lines = ["💎 低價潛力股發掘"]
         for r in found[:8]:
-            lines.append(f"[{r['score']}分] {nm(r['ticker'])} 收{r['close']} 位階{r['pctile']}%")
+            lines.append(f"[{r['score']}分] {label(r['ticker'])} 收{r['close']} 位階{r['pctile']}%")
         lines.append("（規則型篩選：位階低+籌碼進+止跌；僅供參考，非投資建議）")
         try:
             send_line("\n".join(lines))

@@ -2,7 +2,7 @@ name: 每日訊號 LINE 通知
 
 on:
   schedule:
-    - cron: '30 6 * * 1-5'   # 台灣時間 14:30（UTC+8），週一至五（收盤後）
+    - cron: '30 6 * * 1-5'   # 台灣時間 14:30（UTC+8），週一至五（收盤後）；GitHub 排程常延遲數小時
   workflow_dispatch: {}       # 允許手動觸發測試
 
 jobs:
@@ -19,3 +19,33 @@ jobs:
           LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
           LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+
+      # ── 給 n8n AI 小精靈讀的訊號 JSON（推播失敗也照樣匯出）──
+      - name: 匯出訊號 JSON
+        id: export
+        if: ${{ !cancelled() }}
+        run: python export_signals.py --out out/signals
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+      - name: 上傳到 Cloudflare R2
+        if: ${{ !cancelled() && steps.export.outcome == 'success' }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          # R2 不支援新版 AWS CLI 預設的額外 checksum 標頭
+          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_PATH_PREFIX: ${{ secrets.R2_PATH_PREFIX }}
+        run: |
+          for v in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY R2_ACCOUNT_ID R2_BUCKET R2_PATH_PREFIX; do
+            [ -n "${!v}" ] || { echo "::error::缺少 secret：$v"; exit 1; }
+          done
+          EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          DEST="s3://${R2_BUCKET}/${R2_PATH_PREFIX}"
+          OPTS="--endpoint-url $EP --content-type application/json --only-show-errors"
+          aws s3 sync out/signals/latest "$DEST/latest" --delete --cache-control "max-age=300" $OPTS
+          aws s3 cp out/signals/daily "$DEST/daily" --recursive --cache-control "max-age=86400" $OPTS
+          echo "已上傳 $(find out/signals -type f | wc -l) 個檔案"

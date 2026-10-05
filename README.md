@@ -43,12 +43,40 @@ cp .env.example .env        # 填入 FINMIND_TOKEN（選填，提高流量上限
 ./.venv/bin/python paper.py --strategy breakout --start 2024-01-01 --reset   # 紙上模擬
 ./.venv/bin/python discover.py --top 10                # 發掘低價潛力股（位階低+籌碼進+止跌）
 ./.venv/bin/python alert.py --strategy breakout        # 產生今日訊號並推 LINE（手動下單用）
+./.venv/bin/python export_signals.py                   # 匯出訊號 JSON 到 out/signals（給 n8n 讀）
+./.venv/bin/python -m pytest                           # 測試（需先 pip install pytest）
 ```
 
 ## 自動排程（GitHub Actions，免開電腦）
-- `.github/workflows/daily-signal.yml`：每交易日 14:30 跑 `alert.py` 推 LINE 訊號。
+- `.github/workflows/daily-signal.yml`：每交易日 14:30 跑 `alert.py` 推 LINE 訊號，
+  接著跑 `export_signals.py` 把訊號 JSON 上傳到 Cloudflare R2（給 n8n AI 小精靈讀）。
+  GitHub 排程實際常延遲數小時（近期多在晚上 8~10 點執行）。
 - `.github/workflows/weekly-discover.yml`：每週六跑 `discover.py` 推低價潛力股。
-- 需在 GitHub repo 設 Secrets：`LINE_CHANNEL_ACCESS_TOKEN`、`FINMIND_TOKEN`。
+- 推播只 Push 給 `LINE_USER_ID`（不再 broadcast）；推播或匯出失敗時 job 會顯示失敗。
+- 需在 GitHub repo 設 Secrets：
+
+| Secret | 用途 |
+|---|---|
+| `FINMIND_TOKEN` | FinMind 資料 |
+| `LINE_CHANNEL_ACCESS_TOKEN` | LINE 推播 |
+| `LINE_USER_ID` | 推播對象（你自己的 userId） |
+| `R2_ACCOUNT_ID` | Cloudflare 帳號 ID（R2 endpoint 用） |
+| `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | R2 API token（Object Read & Write，限定該 bucket） |
+| `R2_BUCKET` | bucket 名稱 |
+| `R2_PATH_PREFIX` | 不易猜的隨機路徑前綴 |
+
+## 訊號 JSON（給 n8n 讀）
+`export_signals.py` 產出（公開網址：`<R2 公開網域>/<R2_PATH_PREFIX>/...`）：
+
+| 路徑 | 內容 |
+|---|---|
+| `latest/summary.json` | 今日總覽：breakout 買進/出場/續抱/空手、潛力股排名、評分規則、warnings |
+| `latest/tickers/{代號}.json` | 個股明細：價量、籌碼、breakout 判斷依據、潛力股評分明細（含未入選原因）、近 10 日變化 |
+| `daily/{日期}/...` | 每日存檔，結構同上 |
+
+- 數值一律為**未四捨五入的原始值**；給人看的字串在 `display` 欄位。
+- 比例欄位是 0~1 的小數：`pctile`（位階）、`change_pct`、`pct_above_exit_level`、`return_since_entry` 等。
+- 籌碼單位是「張」。`schema_version` 變動代表欄位有不相容的修改。
 
 ## 策略（6 種，規則型可回測）
 `ma_cross`（均線＋籌碼）、`momentum`（動能）、`rsi_reversion`（RSI 回歸）、
