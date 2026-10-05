@@ -1,7 +1,7 @@
 """發掘低價潛力股：掃描一籃子股票，篩出「位階低 + 籌碼進場 + 開始止跌」的標的。
 
 判準（規則型、可解釋）：
-  1. 位階低：現價在近一年區間的低檔（低百分位）
+  1. 位階低：現價在近一年（滾動 252 個交易日）收盤區間的低檔（低百分位）
   2. 籌碼進：外資近 20 日累計買超為正
   3. 止跌訊號：站上 20 日均線，且均線翻揚
 
@@ -34,8 +34,11 @@ NAME_MAP = {
 }
 
 
+LOOKBACK = 252  # 位階區間：滾動 252 個交易日（約一年）
+
+
 def score(df, max_pctile: float = 0.5):
-    close = df["close"]
+    close = df["close"].tail(LOOKBACK)
     if len(close) < 120:
         return None
     px = float(close.iloc[-1])
@@ -52,16 +55,16 @@ def score(df, max_pctile: float = 0.5):
     s = 0
     reasons = []
     if pctile < 0.35:
-        s += 2; reasons.append(f"位階低（一年區間{pctile*100:.0f}%）")
+        s += 2; reasons.append(f"位階低（一年區間{pctile*100:.1f}%）")
     else:
-        s += 1; reasons.append(f"位階偏低（{pctile*100:.0f}%）")
+        s += 1; reasons.append(f"位階偏低（{pctile*100:.1f}%）")
     if foreign20 > 0:
         s += 2; reasons.append(f"外資近20日買超+{foreign20:,.0f}張")
     if above20 and turning:
         s += 2; reasons.append("站上20MA且均線翻揚(止跌)")
     elif above20:
         s += 1; reasons.append("站上20MA")
-    return {"close": round(px, 2), "pctile": round(pctile * 100), "foreign20": round(foreign20),
+    return {"close": round(px, 2), "pctile": round(pctile * 100, 1), "foreign20": round(foreign20),
             "score": s, "reasons": reasons}
 
 
