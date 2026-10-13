@@ -1,0 +1,161 @@
+{
+  "name": "LINE 小精靈（階段2：echo）",
+  "nodes": [
+    {
+      "id": "dab845ad-92a1-40c3-a068-e963e5daf7da",
+      "name": "LINE Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "0f8b271c-aa0f-4f3f-9ba9-b4b1e795987e",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "line",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "c1ed06c0-487f-4cb1-a672-9d089a862d56",
+      "name": "回應 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "respondWith": "noData",
+        "options": {}
+      }
+    },
+    {
+      "id": "4179bf34-aa2a-407c-b7e4-28ae72cb71c0",
+      "name": "拆開 events",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "fieldToSplitOut": "body.events",
+        "options": {}
+      }
+    },
+    {
+      "id": "339d3c33-9ca9-406c-83cd-a875f37c27a2",
+      "name": "只留文字訊息",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "f32798ca-8a2b-44fb-a71f-16a3be54de8e",
+              "leftValue": "={{ $json.type }}",
+              "rightValue": "message",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "d5135b6b-00f0-4b6c-98ae-44ecf04c4272",
+              "leftValue": "={{ $json.message.type }}",
+              "rightValue": "text",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b31fe165-d6d5-4b97-ae32-b29f81a6c3ce",
+      "name": "LINE Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/reply",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ replyToken: $json.replyToken, messages: [{ type: 'text', text: '🧚 小精靈收到：' + $json.message.text }] }) }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "LINE Webhook": {
+      "main": [
+        [
+          {
+            "node": "回應 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "回應 200": {
+      "main": [
+        [
+          {
+            "node": "拆開 events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "拆開 events": {
+      "main": [
+        [
+          {
+            "node": "只留文字訊息",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "只留文字訊息": {
+      "main": [
+        [
+          {
+            "node": "LINE Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false
+}
