@@ -63,8 +63,10 @@ docker compose down               # 停止（資料保留在 n8n_data volume）
 ## 階段 3：AI 小精靈（`workflows/line-ai-sprite.json`）
 workflow JSON 由 `scripts/build_ai_workflow.py` 產生（系統提示詞、工具描述都在裡面，方便 review）：
 ```bash
-python3 n8n/scripts/build_ai_workflow.py
+python3 n8n/scripts/build_ai_workflow.py <Crypto credential id>
+docker compose exec -T n8n n8n import:workflow --input=/workflows/line-error-notify.json
 docker compose exec -T n8n n8n import:workflow --input=/workflows/line-ai-sprite.json
+docker compose exec -T n8n n8n publish:workflow --id=LineErrNotify001
 docker compose exec -T n8n n8n publish:workflow --id=WdMd52HM3w0w546g
 docker compose restart n8n          # CLI 發布後需重啟 n8n 才生效（tunnel 不用重啟，網址不變）
 ```
@@ -73,3 +75,11 @@ docker compose restart n8n          # CLI 發布後需重啟 n8n 才生效（tun
 - 流程：整理輸入 → AI Agent（Gemini 2.5 Flash + 對話記憶 10 輪 + 3 個 HTTP 工具）→ 整理回覆（去 Markdown、附免責聲明）→ Reply API；
   AI 失敗時走「降級回覆」，同時另一條支線呼叫 loading 動畫 API 顯示「輸入中」
 - ⚠️ Gemini 免費額度很小（2.5 Flash 每專案每天 20 次請求、每題約 2 次）；正式展示前需開啟計費或改用其他模型
+
+## 階段 4：安全與加分
+- **簽章驗證**：Webhook 開 Raw Body → Crypto 節點用 channel secret 對原始 body 算 HMAC-SHA256（base64）
+  → 與 `x-line-signature` 比對；不符回 401，不會觸發 AI。channel secret 存在 n8n 的 **Crypto credential**（Hmac Secret 欄）
+- **每日上限**：每位使用者每天 30 題（workflow static data 計數，台北時間換日歸零），超過回固定訊息
+- **Quick Reply**：每則回覆附 4 顆按鈕（今日訊號／這週變化／潛力股／規則說明）
+- **錯誤通知**：`line-error-notify.json`（Error Trigger → Push），主流程設定 errorWorkflow 指向它；
+  收件人是 `.env` 的 `LINE_ADMIN_USER_ID`（你自己的 userId，**不是** webhook body 裡的 destination，那是機器人自己）

@@ -3,7 +3,7 @@
   "name": "LINE AI 小精靈",
   "nodes": [
     {
-      "id": "65f78e88-19ba-43d0-b8d0-8c7d75dda185",
+      "id": "a16720fc-8729-4772-8765-4cca80954ec2",
       "name": "LINE Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -15,45 +15,43 @@
         "httpMethod": "POST",
         "path": "line",
         "responseMode": "responseNode",
-        "options": {}
+        "options": {
+          "rawBody": true
+        }
       },
       "webhookId": "0f8b271c-aa0f-4f3f-9ba9-b4b1e795987e"
     },
     {
-      "id": "8472ed2b-8aab-4e13-a590-285c1087a953",
-      "name": "回應 200",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
+      "id": "0aa5753a-1714-4f17-aea4-273b9b810e49",
+      "name": "計算簽章",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 2,
       "position": [
         220,
         0
       ],
       "parameters": {
-        "respondWith": "noData",
-        "options": {}
+        "action": "hmac",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "type": "SHA256",
+        "encoding": "base64",
+        "dataPropertyName": "expectedSignature"
+      },
+      "credentials": {
+        "crypto": {
+          "id": "4DsXdwcQSUi8aiyQ",
+          "name": "Crypto account"
+        }
       }
     },
     {
-      "id": "f15a18b1-f5fd-44b7-bc81-78e377075228",
-      "name": "拆開 events",
-      "type": "n8n-nodes-base.splitOut",
-      "typeVersion": 1,
+      "id": "72189880-8bce-4575-a041-70050af5a1bc",
+      "name": "簽章正確？",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
       "position": [
         440,
-        0
-      ],
-      "parameters": {
-        "fieldToSplitOut": "body.events",
-        "options": {}
-      }
-    },
-    {
-      "id": "3a54288f-9b31-48e7-86c4-ecfaf4331ae3",
-      "name": "只留文字訊息",
-      "type": "n8n-nodes-base.filter",
-      "typeVersion": 2,
-      "position": [
-        660,
         0
       ],
       "parameters": {
@@ -65,21 +63,152 @@
           },
           "conditions": [
             {
-              "id": "4a627314-67cf-48f8-b03e-f3f13e67610a",
-              "leftValue": "={{ $json.type }}",
-              "rightValue": "message",
+              "id": "1ccb242e-166f-46de-88a3-9148ee8ef4c0",
+              "leftValue": "={{ $json.headers['x-line-signature'] ?? '' }}",
               "operator": {
                 "type": "string",
-                "operation": "equals"
+                "operation": "notEmpty",
+                "singleValue": true
               }
             },
             {
-              "id": "990096bd-fbb0-4352-b7cf-c47f98a9f520",
-              "leftValue": "={{ $json.message.type }}",
-              "rightValue": "text",
+              "id": "34b4cb7f-949e-4164-bfa7-34af43a31f27",
+              "leftValue": "={{ $json.headers['x-line-signature'] }}",
               "operator": {
                 "type": "string",
                 "operation": "equals"
+              },
+              "rightValue": "={{ $json.expectedSignature }}"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "ff9a4acb-69bd-47ed-a8d9-f14ed066d84d",
+      "name": "回應 401",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        160
+      ],
+      "parameters": {
+        "respondWith": "noData",
+        "options": {
+          "responseCode": 401
+        }
+      }
+    },
+    {
+      "id": "3a0745cb-513a-403b-8da2-d5e6c283c68e",
+      "name": "回應 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        -20
+      ],
+      "parameters": {
+        "respondWith": "noData",
+        "options": {}
+      }
+    },
+    {
+      "id": "3ebe537d-c95e-4261-896d-d346c0f6ad5b",
+      "name": "拆開 events",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        880,
+        -20
+      ],
+      "parameters": {
+        "fieldToSplitOut": "body.events",
+        "options": {}
+      }
+    },
+    {
+      "id": "fa11c957-24a9-40ee-b418-f246689ea211",
+      "name": "只留文字訊息",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        -20
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "26e8d673-23c0-42a9-8d48-1b5a20ced391",
+              "leftValue": "={{ $json.type }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "rightValue": "message"
+            },
+            {
+              "id": "cf617643-9b27-448e-854b-813096466bba",
+              "leftValue": "={{ $json.message.type }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "rightValue": "text"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e998cfcc-c690-4c20-a050-ad4850a04696",
+      "name": "整理輸入",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        -20
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// 取出 LINE 事件中需要的欄位，並計算這位使用者今天問了幾題（保護 AI 額度）\nconst e = $input.item.json;\nconst store = $getWorkflowStaticData('global');            // 正式執行時會跨次保存\nconst today = $now.setZone('Asia/Taipei').toFormat('yyyy-MM-dd');\nif (store.day !== today) { store.day = today; store.counts = {}; }\nconst uid = e.source.userId;\nstore.counts[uid] = (store.counts[uid] || 0) + 1;\nreturn {\n  json: {\n    chatInput: e.message.text,\n    sessionId: uid,                   // 每位使用者各自的對話記憶\n    replyToken: e.replyToken,\n    usedToday: store.counts[uid],\n    overLimit: store.counts[uid] > 30,\n  },\n};"
+      }
+    },
+    {
+      "id": "fff3c50e-eeca-42dc-b136-69d6e4b4de5b",
+      "name": "未超過每日上限？",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1540,
+        -20
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "de3fd0c6-b147-4744-bb33-fdfb8d9a53b8",
+              "leftValue": "={{ $json.overLimit }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
               }
             }
           ],
@@ -89,27 +218,13 @@
       }
     },
     {
-      "id": "a6b62857-ac60-4ef7-ac45-2abf1c695870",
-      "name": "整理輸入",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        880,
-        0
-      ],
-      "parameters": {
-        "mode": "runOnceForEachItem",
-        "jsCode": "// 取出 LINE 事件中需要的欄位，交給 AI Agent\nconst e = $input.item.json;\nreturn {\n  json: {\n    chatInput: e.message.text,\n    sessionId: e.source.userId,      // 每位使用者各自的對話記憶\n    replyToken: e.replyToken,\n  },\n};"
-      }
-    },
-    {
-      "id": "284c7cbe-a163-4d61-a474-c4dd4372c339",
+      "id": "4dcce672-b469-4b49-8099-e97b3bf024f4",
       "name": "顯示輸入中",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1100,
-        -200
+        1780,
+        -240
       ],
       "parameters": {
         "method": "POST",
@@ -130,13 +245,13 @@
       "onError": "continueRegularOutput"
     },
     {
-      "id": "c60bc7e5-4897-4c80-96ee-f2780be50d05",
+      "id": "89b276ef-5b95-428d-9bb5-38747c7296ee",
       "name": "AI Agent",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3.1,
       "position": [
-        1100,
-        0
+        1780,
+        -20
       ],
       "parameters": {
         "promptType": "define",
@@ -149,12 +264,26 @@
       "onError": "continueErrorOutput"
     },
     {
-      "id": "1f6c1f60-750b-48dc-8a7d-3c5d172e295f",
+      "id": "681f6a4d-74c2-47a9-93a2-0e8dc62601ca",
+      "name": "超過上限回覆",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2180,
+        360
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// 超過每日提問上限\nreturn {\n  json: {\n    replyToken: $json.replyToken,\n    text: '今天已經問了 30 題囉，小精靈要休息了，明天再來找我 🌙',\n  },\n};"
+      }
+    },
+    {
+      "id": "c79a66fd-557f-4e9e-976c-60bfdd89e36c",
       "name": "Gemini",
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1.2,
       "position": [
-        940,
+        1620,
         260
       ],
       "parameters": {
@@ -172,12 +301,12 @@
       }
     },
     {
-      "id": "1a4d4298-faff-4d51-b80c-fef847f636a2",
+      "id": "08b13cca-6aba-4183-9aea-9c64293425ed",
       "name": "對話記憶",
       "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
       "typeVersion": 1.4,
       "position": [
-        1080,
+        1760,
         260
       ],
       "parameters": {
@@ -187,12 +316,12 @@
       }
     },
     {
-      "id": "d46e0fe1-8bde-430b-8ff7-ed6fcdefb98f",
+      "id": "ed4a9a5a-d505-4345-a0aa-a9e3bf61e8a4",
       "name": "get_signal_summary",
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.2,
       "position": [
-        1220,
+        1900,
         260
       ],
       "parameters": {
@@ -209,12 +338,12 @@
       }
     },
     {
-      "id": "021a3fff-728f-4655-a07e-879d757dd40a",
+      "id": "249407be-b908-459b-9370-09f3dcb4c88f",
       "name": "get_ticker_detail",
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.2,
       "position": [
-        1360,
+        2040,
         260
       ],
       "parameters": {
@@ -231,12 +360,12 @@
       }
     },
     {
-      "id": "5ac94cf3-c3f7-4eb5-b1e7-1a25a05026e2",
+      "id": "78ede5f3-4466-4592-8452-c1f7821a31c0",
       "name": "get_realtime_quote",
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.2,
       "position": [
-        1500,
+        2180,
         260
       ],
       "parameters": {
@@ -253,41 +382,41 @@
       }
     },
     {
-      "id": "6b16fcf6-116f-4483-bbda-8f6a421a7c5a",
+      "id": "02ea7c25-ec18-45ad-9b4d-8bae96749d96",
       "name": "整理回覆",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1500,
-        -60
+        2180,
+        -80
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "// LINE 不支援 Markdown：去掉 **、#、` 等符號；限制長度；固定附上免責聲明\nlet text = String($json.output ?? '').trim();\ntext = text\n  .replace(/\\*\\*(.+?)\\*\\*/g, '$1')\n  .replace(/^#+\\s*/gm, '')\n  .replace(/`/g, '')\n  .replace(/^\\s*[-*]\\s+/gm, '・');\nif (!text) text = '小精靈這次想不出答案，請換個問法再試一次 🙏';\nif (text.length > 4500) text = text.slice(0, 4500) + '…（內容過長已截斷）';\nreturn {\n  json: {\n    replyToken: $('整理輸入').item.json.replyToken,\n    text: text + '\\n\\n※ 小精靈只解釋 quant-bot 的規則型訊號，僅供參考，非投資建議。',\n  },\n};"
+        "jsCode": "// LINE 不支援 Markdown：去掉 **、#、` 等符號；限制長度；固定附上免責聲明與快速按鈕\nconst QUICK_REPLY = { items: [\n  { type: 'action', action: { type: 'message', label: '📈 今日訊號', text: '今天訊號？' } },\n  { type: 'action', action: { type: 'message', label: '🔄 這週變化', text: '這週訊號有什麼變化？' } },\n  { type: 'action', action: { type: 'message', label: '💎 潛力股', text: '低價潛力股有哪些？' } },\n  { type: 'action', action: { type: 'message', label: '📖 規則說明', text: 'breakout 和潛力股的規則是什麼？' } },\n] };\nlet text = String($json.output ?? '').trim();\ntext = text\n  .replace(/\\*\\*(.+?)\\*\\*/g, '$1')\n  .replace(/^#+\\s*/gm, '')\n  .replace(/`/g, '')\n  .replace(/^\\s*[-*]\\s+/gm, '・');\nif (!text) text = '小精靈這次想不出答案，請換個問法再試一次 🙏';\nif (text.length > 4500) text = text.slice(0, 4500) + '…（內容過長已截斷）';\nreturn {\n  json: {\n    replyToken: $('整理輸入').item.json.replyToken,\n    text: text + '\\n\\n※ 小精靈只解釋 quant-bot 的規則型訊號，僅供參考，非投資建議。',\n    quickReply: QUICK_REPLY,\n  },\n};"
       }
     },
     {
-      "id": "d854a84b-e390-402e-bc1d-fb272d62ec77",
+      "id": "da2de8d8-50a9-4b5b-98c6-50ffda7e0be0",
       "name": "降級回覆",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1500,
-        120
+        2180,
+        100
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "// AI Agent 失敗（模型逾時、額度用完、工具錯誤）時的降級回覆\nreturn {\n  json: {\n    replyToken: $('整理輸入').item.json.replyToken,\n    text: '小精靈暫時無法回答（AI 服務忙碌或資料讀取失敗），請稍後再試 🙏',\n  },\n};"
+        "jsCode": "// AI Agent 失敗（模型逾時、額度用完、工具錯誤）時的降級回覆\nconst QUICK_REPLY = { items: [\n  { type: 'action', action: { type: 'message', label: '📈 今日訊號', text: '今天訊號？' } },\n  { type: 'action', action: { type: 'message', label: '🔄 這週變化', text: '這週訊號有什麼變化？' } },\n  { type: 'action', action: { type: 'message', label: '💎 潛力股', text: '低價潛力股有哪些？' } },\n  { type: 'action', action: { type: 'message', label: '📖 規則說明', text: 'breakout 和潛力股的規則是什麼？' } },\n] };\nreturn {\n  json: {\n    replyToken: $('整理輸入').item.json.replyToken,\n    text: '小精靈暫時無法回答（AI 服務忙碌或資料讀取失敗），請稍後再試 🙏',\n    quickReply: QUICK_REPLY,\n  },\n};"
       }
     },
     {
-      "id": "fc67b4c9-c71c-45f4-83fa-c36c1bba0977",
+      "id": "d687a7c8-d150-4d35-8303-44e739b7e8db",
       "name": "LINE Reply",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1740,
-        0
+        2420,
+        -20
       ],
       "parameters": {
         "method": "POST",
@@ -296,7 +425,7 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ replyToken: $json.replyToken, messages: [{ type: 'text', text: $json.text }] }) }}",
+        "jsonBody": "={{ JSON.stringify({ replyToken: $json.replyToken, messages: [{ type: 'text', text: $json.text, quickReply: $json.quickReply }] }) }}",
         "options": {}
       },
       "credentials": {
@@ -312,7 +441,36 @@
       "main": [
         [
           {
+            "node": "計算簽章",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "計算簽章": {
+      "main": [
+        [
+          {
+            "node": "簽章正確？",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "簽章正確？": {
+      "main": [
+        [
+          {
             "node": "回應 200",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "回應 401",
             "type": "main",
             "index": 0
           }
@@ -356,12 +514,30 @@
       "main": [
         [
           {
+            "node": "未超過每日上限？",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "未超過每日上限？": {
+      "main": [
+        [
+          {
             "node": "AI Agent",
             "type": "main",
             "index": 0
           },
           {
             "node": "顯示輸入中",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "超過上限回覆",
             "type": "main",
             "index": 0
           }
@@ -398,6 +574,17 @@
       ]
     },
     "降級回覆": {
+      "main": [
+        [
+          {
+            "node": "LINE Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "超過上限回覆": {
       "main": [
         [
           {
@@ -465,7 +652,8 @@
     }
   },
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "errorWorkflow": "LineErrNotify001"
   },
   "active": false
 }

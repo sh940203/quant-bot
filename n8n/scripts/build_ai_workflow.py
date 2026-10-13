@@ -1,16 +1,20 @@
 """產生 n8n/workflows/line-ai-sprite.json（LINE AI 小精靈）。
 
 用程式產生 workflow JSON，系統提示詞與工具描述才能在 git 裡被 review。
-執行：python3 n8n/scripts/build_ai_workflow.py
+執行：python3 n8n/scripts/build_ai_workflow.py <Crypto credential id>
 """
 import json
 import pathlib
+import sys
 import uuid
 
 WORKFLOW_ID = "WdMd52HM3w0w546g"          # 沿用階段 2 的 workflow（匯入時覆蓋）
 WEBHOOK_ID = None                           # 由既有 echo workflow 讀取，保持 webhook 註冊不變
 CRED_LINE = {"httpHeaderAuth": {"id": "hEfjdqV0KBEEzSHk", "name": "Header Auth account"}}
 CRED_GEMINI = {"googlePalmApi": {"id": "zaRFi5kqulYsIVMI", "name": "Google Gemini(PaLM) Api account"}}
+CRED_CRYPTO = {"crypto": {"id": "__CRYPTO_ID__", "name": "LINE Channel Secret"}}  # HMAC 驗簽用的 channel secret
+ERROR_WORKFLOW_ID = "LineErrNotify001"
+DAILY_LIMIT = 30                            # 每位使用者每天最多問幾題（保護 AI 額度）
 DISCLAIMER = "※ 小精靈只解釋 quant-bot 的規則型訊號，僅供參考，非投資建議。"
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -61,17 +65,32 @@ DETAIL_DESC = ("取得單一股票的訊號明細 JSON。包含 price（收盤�
 QUOTE_DESC = ("查詢台股即時報價（證交所 MIS，上市與上櫃都可查）。回傳 msgArray，其中有資料的那筆欄位：z 成交價、y 昨收、o 開、h 高、l 低、"
               "v 累積成交量（張）、n 名稱、d 日期、t 時間。回答「現在價格」「今天漲跌」時使用。參數 code 是 4 位數台股代號。")
 
-CODE_PREPARE = """// 取出 LINE 事件中需要的欄位，交給 AI Agent
-const e = $input.item.json;
-return {
-  json: {
-    chatInput: e.message.text,
-    sessionId: e.source.userId,      // 每位使用者各自的對話記憶
-    replyToken: e.replyToken,
-  },
-};"""
+QUICK_REPLY = """const QUICK_REPLY = { items: [
+  { type: 'action', action: { type: 'message', label: '📈 今日訊號', text: '今天訊號？' } },
+  { type: 'action', action: { type: 'message', label: '🔄 這週變化', text: '這週訊號有什麼變化？' } },
+  { type: 'action', action: { type: 'message', label: '💎 潛力股', text: '低價潛力股有哪些？' } },
+  { type: 'action', action: { type: 'message', label: '📖 規則說明', text: 'breakout 和潛力股的規則是什麼？' } },
+] };"""
 
-CODE_FORMAT = f"""// LINE 不支援 Markdown：去掉 **、#、` 等符號；限制長度；固定附上免責聲明
+CODE_PREPARE = f"""// 取出 LINE 事件中需要的欄位，並計算這位使用者今天問了幾題（保護 AI 額度）
+const e = $input.item.json;
+const store = $getWorkflowStaticData('global');            // 正式執行時會跨次保存
+const today = $now.setZone('Asia/Taipei').toFormat('yyyy-MM-dd');
+if (store.day !== today) {{ store.day = today; store.counts = {{}}; }}
+const uid = e.source.userId;
+store.counts[uid] = (store.counts[uid] || 0) + 1;
+return {{
+  json: {{
+    chatInput: e.message.text,
+    sessionId: uid,                   // 每位使用者各自的對話記憶
+    replyToken: e.replyToken,
+    usedToday: store.counts[uid],
+    overLimit: store.counts[uid] > {DAILY_LIMIT},
+  }},
+}};"""
+
+CODE_FORMAT = f"""// LINE 不支援 Markdown：去掉 **、#、` 等符號；限制長度；固定附上免責聲明與快速按鈕
+{QUICK_REPLY}
 let text = String($json.output ?? '').trim();
 text = text
   .replace(/\\*\\*(.+?)\\*\\*/g, '$1')
@@ -84,16 +103,27 @@ return {{
   json: {{
     replyToken: $('整理輸入').item.json.replyToken,
     text: text + '\\n\\n{DISCLAIMER}',
+    quickReply: QUICK_REPLY,
   }},
 }};"""
 
-CODE_FALLBACK = """// AI Agent 失敗（模型逾時、額度用完、工具錯誤）時的降級回覆
-return {
-  json: {
+CODE_FALLBACK = f"""// AI Agent 失敗（模型逾時、額度用完、工具錯誤）時的降級回覆
+{QUICK_REPLY}
+return {{
+  json: {{
     replyToken: $('整理輸入').item.json.replyToken,
     text: '小精靈暫時無法回答（AI 服務忙碌或資料讀取失敗），請稍後再試 🙏',
-  },
-};"""
+    quickReply: QUICK_REPLY,
+  }},
+}};"""
+
+CODE_OVER_LIMIT = f"""// 超過每日提問上限
+return {{
+  json: {{
+    replyToken: $json.replyToken,
+    text: '今天已經問了 {DAILY_LIMIT} 題囉，小精靈要休息了，明天再來找我 🌙',
+  }},
+}};"""
 
 
 def node(name, type_, version, pos, params, **extra):
@@ -111,84 +141,140 @@ def tool(name, pos, url, desc):
     })
 
 
+def cond(left, op, right=None, type_="string"):
+    c = {"id": str(uuid.uuid4()), "leftValue": left, "operator": {"type": type_, "operation": op}}
+    if right is not None:
+        c["rightValue"] = right
+    else:
+        c["operator"]["singleValue"] = True
+    return c
+
+
+def conditions(*cs):
+    return {"conditions": {"options": {"caseSensitive": True, "leftValue": "", "typeValidation": "strict"},
+                           "conditions": list(cs), "combinator": "and"}, "options": {}}
+
+
+def respond(name, pos, code):
+    opts = {} if code == 200 else {"responseCode": code}
+    return node(name, "n8n-nodes-base.respondToWebhook", 1.1, pos, {"respondWith": "noData", "options": opts})
+
+
 nodes = [
     node("LINE Webhook", "n8n-nodes-base.webhook", 2, [0, 0],
-         {"httpMethod": "POST", "path": "line", "responseMode": "responseNode", "options": {}},
+         {"httpMethod": "POST", "path": "line", "responseMode": "responseNode",
+          "options": {"rawBody": True}},          # 保留原始 body，簽章要對原始位元組計算
          webhookId=WEBHOOK_ID),
-    node("回應 200", "n8n-nodes-base.respondToWebhook", 1.1, [220, 0],
-         {"respondWith": "noData", "options": {}}),
-    node("拆開 events", "n8n-nodes-base.splitOut", 1, [440, 0],
+    node("計算簽章", "n8n-nodes-base.crypto", 2, [220, 0], {
+        "action": "hmac", "binaryData": True, "binaryPropertyName": "data",
+        "type": "SHA256", "encoding": "base64", "dataPropertyName": "expectedSignature"},
+        credentials=CRED_CRYPTO),
+    node("簽章正確？", "n8n-nodes-base.if", 2.2, [440, 0], conditions(
+        cond("={{ $json.headers['x-line-signature'] ?? '' }}", "notEmpty"),
+        cond("={{ $json.headers['x-line-signature'] }}", "equals", "={{ $json.expectedSignature }}"))),
+    respond("回應 401", [660, 160], 401),
+    respond("回應 200", [660, -20], 200),
+    node("拆開 events", "n8n-nodes-base.splitOut", 1, [880, -20],
          {"fieldToSplitOut": "body.events", "options": {}}),
-    node("只留文字訊息", "n8n-nodes-base.filter", 2, [660, 0], {
-        "conditions": {
-            "options": {"caseSensitive": True, "leftValue": "", "typeValidation": "strict"},
-            "conditions": [
-                {"id": str(uuid.uuid4()), "leftValue": "={{ $json.type }}", "rightValue": "message",
-                 "operator": {"type": "string", "operation": "equals"}},
-                {"id": str(uuid.uuid4()), "leftValue": "={{ $json.message.type }}", "rightValue": "text",
-                 "operator": {"type": "string", "operation": "equals"}}],
-            "combinator": "and"},
-        "options": {}}),
-    node("整理輸入", "n8n-nodes-base.code", 2, [880, 0],
+    node("只留文字訊息", "n8n-nodes-base.filter", 2, [1100, -20], conditions(
+        cond("={{ $json.type }}", "equals", "message"),
+        cond("={{ $json.message.type }}", "equals", "text"))),
+    node("整理輸入", "n8n-nodes-base.code", 2, [1320, -20],
          {"mode": "runOnceForEachItem", "jsCode": CODE_PREPARE}),
-    node("顯示輸入中", "n8n-nodes-base.httpRequest", 4.2, [1100, -200], {
+    node("未超過每日上限？", "n8n-nodes-base.if", 2.2, [1540, -20], conditions(
+        cond("={{ $json.overLimit }}", "false", type_="boolean"))),
+    node("顯示輸入中", "n8n-nodes-base.httpRequest", 4.2, [1780, -240], {
         "method": "POST", "url": "https://api.line.me/v2/bot/chat/loading/start",
         "authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth",
         "sendBody": True, "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ chatId: $json.sessionId, loadingSeconds: 20 }) }}",
         "options": {}}, credentials=CRED_LINE, onError="continueRegularOutput"),
-    node("AI Agent", "@n8n/n8n-nodes-langchain.agent", 3.1, [1100, 0], {
+    node("AI Agent", "@n8n/n8n-nodes-langchain.agent", 3.1, [1780, -20], {
         "promptType": "define", "text": "={{ $json.chatInput }}",
         "options": {"systemMessage": "=" + SYSTEM_PROMPT, "maxIterations": 6}},
         onError="continueErrorOutput"),
-    node("Gemini", "@n8n/n8n-nodes-langchain.lmChatGoogleGemini", 1.2, [940, 260], {
+    node("超過上限回覆", "n8n-nodes-base.code", 2, [2180, 360],
+         {"mode": "runOnceForEachItem", "jsCode": CODE_OVER_LIMIT}),
+    node("Gemini", "@n8n/n8n-nodes-langchain.lmChatGoogleGemini", 1.2, [1620, 260], {
         "modelName": "models/gemini-2.5-flash",
         "options": {"temperature": 0.3, "maxOutputTokens": 2048}}, credentials=CRED_GEMINI),
-    node("對話記憶", "@n8n/n8n-nodes-langchain.memoryBufferWindow", 1.4, [1080, 260],
+    node("對話記憶", "@n8n/n8n-nodes-langchain.memoryBufferWindow", 1.4, [1760, 260],
          {"sessionIdType": "fromInput", "sessionKey": "={{ $json.sessionId }}", "contextWindowLength": 10}),
-    tool("get_signal_summary", [1220, 260],
+    tool("get_signal_summary", [1900, 260],
          "={{ $env.SIGNALS_BASE_URL }}/latest/summary.json", SUMMARY_DESC),
-    tool("get_ticker_detail", [1360, 260],
+    tool("get_ticker_detail", [2040, 260],
          "={{ $env.SIGNALS_BASE_URL }}/latest/tickers/{{ $fromAI('code', '4 位數台股代號，例如 2330', 'string') }}.json",
          DETAIL_DESC),
-    tool("get_realtime_quote", [1500, 260],
+    tool("get_realtime_quote", [2180, 260],
          "=https://mis.twse.com.tw/stock/api/getStockInfo.jsp?json=1&delay=0&ex_ch=tse_{{ $fromAI('code', '4 位數台股代號，例如 2330', 'string') }}.tw%7Cotc_{{ $fromAI('code', '4 位數台股代號，例如 2330', 'string') }}.tw",
          QUOTE_DESC),
-    node("整理回覆", "n8n-nodes-base.code", 2, [1500, -60],
+    node("整理回覆", "n8n-nodes-base.code", 2, [2180, -80],
          {"mode": "runOnceForEachItem", "jsCode": CODE_FORMAT}),
-    node("降級回覆", "n8n-nodes-base.code", 2, [1500, 120],
+    node("降級回覆", "n8n-nodes-base.code", 2, [2180, 100],
          {"mode": "runOnceForEachItem", "jsCode": CODE_FALLBACK}),
-    node("LINE Reply", "n8n-nodes-base.httpRequest", 4.2, [1740, 0], {
+    node("LINE Reply", "n8n-nodes-base.httpRequest", 4.2, [2420, -20], {
         "method": "POST", "url": "https://api.line.me/v2/bot/message/reply",
         "authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth",
         "sendBody": True, "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ replyToken: $json.replyToken, messages: [{ type: 'text', text: $json.text }] }) }}",
+        "jsonBody": "={{ JSON.stringify({ replyToken: $json.replyToken, messages: [{ type: 'text', text: $json.text, quickReply: $json.quickReply }] }) }}",
         "options": {}}, credentials=CRED_LINE),
 ]
 
 
-def main(*targets):
-    return {"main": [[{"node": t, "type": "main", "index": 0} for t in targets]]}
+def main(*targets, index=0):
+    return [{"node": t, "type": "main", "index": 0} for t in targets]
 
 
 connections = {
-    "LINE Webhook": main("回應 200"),
-    "回應 200": main("拆開 events"),
-    "拆開 events": main("只留文字訊息"),
-    "只留文字訊息": main("整理輸入"),
-    "整理輸入": main("AI Agent", "顯示輸入中"),
-    "AI Agent": {"main": [[{"node": "整理回覆", "type": "main", "index": 0}],
-                          [{"node": "降級回覆", "type": "main", "index": 0}]]},
-    "整理回覆": main("LINE Reply"),
-    "降級回覆": main("LINE Reply"),
+    "LINE Webhook": {"main": [main("計算簽章")]},
+    "計算簽章": {"main": [main("簽章正確？")]},
+    "簽章正確？": {"main": [main("回應 200"), main("回應 401")]},
+    "回應 200": {"main": [main("拆開 events")]},
+    "拆開 events": {"main": [main("只留文字訊息")]},
+    "只留文字訊息": {"main": [main("整理輸入")]},
+    "整理輸入": {"main": [main("未超過每日上限？")]},
+    "未超過每日上限？": {"main": [main("AI Agent", "顯示輸入中"), main("超過上限回覆")]},
+    "AI Agent": {"main": [main("整理回覆"), main("降級回覆")]},
+    "整理回覆": {"main": [main("LINE Reply")]},
+    "降級回覆": {"main": [main("LINE Reply")]},
+    "超過上限回覆": {"main": [main("LINE Reply")]},
     "Gemini": {"ai_languageModel": [[{"node": "AI Agent", "type": "ai_languageModel", "index": 0}]]},
     "對話記憶": {"ai_memory": [[{"node": "AI Agent", "type": "ai_memory", "index": 0}]]},
 }
 for t in ["get_signal_summary", "get_ticker_detail", "get_realtime_quote"]:
     connections[t] = {"ai_tool": [[{"node": "AI Agent", "type": "ai_tool", "index": 0}]]}
 
+# ── 錯誤通知 workflow：主流程任何節點出錯（例如 LINE Reply 失敗）就 Push 給管理員 ──
+CODE_ERROR_MSG = """// 把錯誤資訊整理成一則 LINE 訊息
+const ex = $json.execution ?? {};
+const lines = [
+  '⚠️ 小精靈出錯了',
+  `節點：${ex.lastNodeExecuted ?? '未知'}`,
+  `錯誤：${String(ex.error?.message ?? '未知').slice(0, 300)}`,
+  `執行：#${ex.id ?? '?'}（${$now.setZone('Asia/Taipei').toFormat('MM/dd HH:mm')}）`,
+];
+return [{ json: { text: lines.join('\\n') } }];"""
+
+error_nodes = [
+    node("錯誤觸發", "n8n-nodes-base.errorTrigger", 1, [0, 0], {}),
+    node("整理錯誤訊息", "n8n-nodes-base.code", 2, [220, 0],
+         {"mode": "runOnceForAllItems", "jsCode": CODE_ERROR_MSG}),
+    node("Push 給管理員", "n8n-nodes-base.httpRequest", 4.2, [440, 0], {
+        "method": "POST", "url": "https://api.line.me/v2/bot/message/push",
+        "authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth",
+        "sendBody": True, "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ to: $env.LINE_ADMIN_USER_ID, messages: [{ type: 'text', text: $json.text }] }) }}",
+        "options": {}}, credentials=CRED_LINE),
+]
+error_wf = {"id": ERROR_WORKFLOW_ID, "name": "LINE 小精靈錯誤通知", "nodes": error_nodes,
+            "connections": {"錯誤觸發": {"main": [main("整理錯誤訊息")]},
+                            "整理錯誤訊息": {"main": [main("Push 給管理員")]}},
+            "settings": {"executionOrder": "v1"}, "active": False}
+
+crypto_id = sys.argv[1] if len(sys.argv) > 1 else "__CRYPTO_ID__"
 wf = {"id": WORKFLOW_ID, "name": "LINE AI 小精靈", "nodes": nodes, "connections": connections,
-      "settings": {"executionOrder": "v1"}, "active": False}
-out = ROOT / "workflows/line-ai-sprite.json"
-out.write_text(json.dumps(wf, ensure_ascii=False, indent=2))
-print(f"寫入 {out}（{len(nodes)} 個節點）")
+      "settings": {"executionOrder": "v1", "errorWorkflow": ERROR_WORKFLOW_ID}, "active": False}
+for name, obj in [("line-ai-sprite.json", wf), ("line-error-notify.json", error_wf)]:
+    out = ROOT / "workflows" / name
+    out.write_text(json.dumps(obj, ensure_ascii=False, indent=2).replace("__CRYPTO_ID__", crypto_id))
+    print(f"寫入 {out}（{len(obj['nodes'])} 個節點）")
