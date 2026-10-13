@@ -95,3 +95,12 @@ def test_export_schema_is_strict_json():
     assert s["discover"]["ranked"][0]["code"] == "3035"
     assert s["discover"]["ranked"][0]["pctile"] == pytest.approx(0.346)
     json.dumps(clean(s), allow_nan=False)
+
+
+def test_summary_recent_changes():
+    closes = list(np.linspace(100, 150, 60)) + [120.0]   # 最後一天跌破 10 日低 → 出場
+    t = build_ticker("2330", make_df(closes), in_breakout=True, in_discover=False, max_pctile=0.5, history=5)
+    s = build_summary({"2330": t}, t["as_of"], [], min_score=3, max_pctile=0.5, top=10)
+    ch = s["breakout"]["recent_changes"]
+    assert ch == [{"date": t["as_of"], "code": "2330", "name": "台積電", "event": "出場", "close": 120.0}]
+    assert s["discover"]["ranked_history"] == []

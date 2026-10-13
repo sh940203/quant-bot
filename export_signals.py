@@ -112,6 +112,38 @@ def build_ticker(code: str, df, in_breakout: bool, in_discover: bool,
     return out
 
 
+def breakout_changes(tickers: dict) -> list:
+    """breakout 籃子近 N 日的進出場事件（由各檔 history 比對前後日部位）。"""
+    events = []
+    for code in BREAKOUT_TICKERS:
+        t = tickers.get(code)
+        if not t:
+            continue
+        h = t["breakout"]["history"]
+        for prev, cur in zip(h, h[1:]):
+            if (prev["position"] > 0) != (cur["position"] > 0):
+                events.append({"date": cur["date"], "code": code, "name": t["name"],
+                               "event": "進場" if cur["position"] > 0 else "出場",
+                               "close": cur["close"]})
+    return sorted(events, key=lambda e: (e["date"], e["code"]))
+
+
+def discover_ranked_history(tickers: dict, min_score: int) -> list:
+    """近 N 日每天達到 min_score 的潛力股（由各檔 discover.history 重組）。"""
+    by_date: dict[str, list] = {}
+    for code in DEFAULT_UNIVERSE:
+        t = tickers.get(code)
+        d = t and t["discover"]
+        if not d:
+            continue
+        for h in d["history"]:
+            day = by_date.setdefault(h["date"], [])
+            if h["eligible"] and h["score"] >= min_score:
+                day.append({"code": code, "name": t["name"], "score": h["score"], "pctile": h["pctile"]})
+    return [{"date": k, "ranked": sorted(v, key=lambda r: r["score"], reverse=True)}
+            for k, v in sorted(by_date.items())]
+
+
 def build_summary(tickers: dict, as_of: str, warnings: list, min_score: int,
                   max_pctile: float, top: int) -> dict:
     breakout = {"buy": [], "sell": [], "hold": [], "flat": []}
@@ -153,6 +185,7 @@ def build_summary(tickers: dict, as_of: str, warnings: list, min_score: int,
             },
             "tickers": BREAKOUT_TICKERS,
             **breakout,
+            "recent_changes": breakout_changes(tickers),
         },
         "discover": {
             "strategy": "低價潛力股（位階低＋籌碼進＋止跌）",
@@ -167,6 +200,7 @@ def build_summary(tickers: dict, as_of: str, warnings: list, min_score: int,
             ],
             "push_schedule": "每週六推播（使用週五收盤資料）；此處為每日重算結果",
             "ranked": ranked[:top],
+            "ranked_history": discover_ranked_history(tickers, min_score),
         },
     }
 
