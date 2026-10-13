@@ -1,0 +1,29 @@
+# n8n（AI 小精靈）＋ Cloudflare quick tunnel
+# 啟動：cd n8n && cp .env.example .env（填 N8N_ENCRYPTION_KEY）&& docker compose up -d
+services:
+  n8n:
+    image: n8nio/n8n:2.43.4
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5678:5678"   # 只開給本機；對外一律走 tunnel
+    env_file: .env
+    environment:
+      - GENERIC_TIMEZONE=Asia/Taipei
+      - TZ=Asia/Taipei
+      - N8N_PROXY_HOPS=1        # 前面有一層 cloudflared
+      - N8N_DIAGNOSTICS_ENABLED=false
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./workflows:/workflows:ro
+
+  # quick tunnel：免網域，但每次重啟網址都會變（要到 LINE Developers 更新 Webhook URL）
+  # 網址查詢：docker compose logs tunnel | grep trycloudflare.com
+  tunnel:
+    image: cloudflare/cloudflared:2026.10.0
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://n8n:5678
+    depends_on:
+      - n8n
+
+volumes:
+  n8n_data:
