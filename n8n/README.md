@@ -59,3 +59,17 @@ docker compose logs -f n8n        # n8n log
 docker compose restart tunnel     # 重開 tunnel（網址會變！）
 docker compose down               # 停止（資料保留在 n8n_data volume）
 ```
+
+## 階段 3：AI 小精靈（`workflows/line-ai-sprite.json`）
+workflow JSON 由 `scripts/build_ai_workflow.py` 產生（系統提示詞、工具描述都在裡面，方便 review）：
+```bash
+python3 n8n/scripts/build_ai_workflow.py
+docker compose exec -T n8n n8n import:workflow --input=/workflows/line-ai-sprite.json
+docker compose exec -T n8n n8n publish:workflow --id=WdMd52HM3w0w546g
+docker compose restart n8n          # CLI 發布後需重啟 n8n 才生效（tunnel 不用重啟，網址不變）
+```
+- `.env` 需要 `SIGNALS_BASE_URL`（R2 公開網域 + 路徑前綴）
+- n8n 需先建好兩個 credential：Header Auth（LINE token）、Google Gemini(PaLM) API
+- 流程：整理輸入 → AI Agent（Gemini 2.5 Flash + 對話記憶 10 輪 + 3 個 HTTP 工具）→ 整理回覆（去 Markdown、附免責聲明）→ Reply API；
+  AI 失敗時走「降級回覆」，同時另一條支線呼叫 loading 動畫 API 顯示「輸入中」
+- ⚠️ Gemini 免費額度很小（2.5 Flash 每專案每天 20 次請求、每題約 2 次）；正式展示前需開啟計費或改用其他模型

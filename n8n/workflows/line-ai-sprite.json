@@ -1,0 +1,471 @@
+{
+  "id": "WdMd52HM3w0w546g",
+  "name": "LINE AI 小精靈",
+  "nodes": [
+    {
+      "id": "65f78e88-19ba-43d0-b8d0-8c7d75dda185",
+      "name": "LINE Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "line",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "0f8b271c-aa0f-4f3f-9ba9-b4b1e795987e"
+    },
+    {
+      "id": "8472ed2b-8aab-4e13-a590-285c1087a953",
+      "name": "回應 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "respondWith": "noData",
+        "options": {}
+      }
+    },
+    {
+      "id": "f15a18b1-f5fd-44b7-bc81-78e377075228",
+      "name": "拆開 events",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "fieldToSplitOut": "body.events",
+        "options": {}
+      }
+    },
+    {
+      "id": "3a54288f-9b31-48e7-86c4-ecfaf4331ae3",
+      "name": "只留文字訊息",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "4a627314-67cf-48f8-b03e-f3f13e67610a",
+              "leftValue": "={{ $json.type }}",
+              "rightValue": "message",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "990096bd-fbb0-4352-b7cf-c47f98a9f520",
+              "leftValue": "={{ $json.message.type }}",
+              "rightValue": "text",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a6b62857-ac60-4ef7-ac45-2abf1c695870",
+      "name": "整理輸入",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// 取出 LINE 事件中需要的欄位，交給 AI Agent\nconst e = $input.item.json;\nreturn {\n  json: {\n    chatInput: e.message.text,\n    sessionId: e.source.userId,      // 每位使用者各自的對話記憶\n    replyToken: e.replyToken,\n  },\n};"
+      }
+    },
+    {
+      "id": "284c7cbe-a163-4d61-a474-c4dd4372c339",
+      "name": "顯示輸入中",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        -200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/chat/loading/start",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chatId: $json.sessionId, loadingSeconds: 20 }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "hEfjdqV0KBEEzSHk",
+          "name": "Header Auth account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "c60bc7e5-4897-4c80-96ee-f2780be50d05",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1100,
+        0
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}",
+        "options": {
+          "systemMessage": "=你是「書浩專屬投資機器人」裡的 AI 小精靈，負責用白話解釋 quant-bot 每天產生的台股規則型訊號。\n現在時間（台北）：{{ $now.setZone('Asia/Taipei').toFormat('yyyy-MM-dd HH:mm') }}\n\n## 你能用的工具\n1. get_signal_summary：今日總覽（breakout 買進/出場/續抱/空手、低價潛力股排名、評分規則、追蹤清單的代號與名稱、資料日期 as_of、warnings）\n2. get_ticker_detail：單一股票明細（價量、三大法人、breakout 判斷依據、潛力股評分明細與未入選原因、近 10 個交易日變化）\n3. get_realtime_quote：證交所/櫃買即時報價（盤中延遲數秒；收盤後為當日收盤）\n\n## 回答規則\n- 每一則新問題都要先呼叫工具取得最新資料再回答；即使先前對話出現過，也不可憑記憶回答數字或訊號狀態。對話記憶只用來理解「它」「那檔」指的是哪一檔股票。\n- 數字一律來自工具結果，不可自行推測或編造。回答時註明資料日期（as_of）。\n- 使用者用股票名稱（如「智原」）時，先用 get_signal_summary 的 universe 找到代號，再查明細。\n- get_ticker_detail 回傳錯誤或找不到時，代表該股不在 quant-bot 追蹤清單；可改用 get_realtime_quote 提供報價，並說明沒有訊號資料。\n- JSON 中的比例欄位是 0~1 的小數（pctile、change_pct、pct_above_exit_level、return_since_entry），回答時換成百分比、保留 1 位小數。籌碼單位是「張」。\n- breakout 每日推播只涵蓋 summary.breakout.tickers 這 6 檔（明細中 in_breakout_basket=true）。其他股票明細裡的 breakout 欄位只是「套用同一規則的參考狀態」，不是 quant-bot 發出的訊號：不可說它「觸發進場/出場訊號」，要說「若套用 breakout 規則，目前會是…，但它不在每日推播清單」。\n- 解釋 breakout：進場＝收盤 ≥ 近 20 日最高收盤；出場＝收盤 ≤ 近 10 日最低收盤；續抱＝已進場且未跌破出場線。說明 entry_level、exit_level、進場日 since、距出場線多少。\n- 解釋潛力股分數：逐項列出 breakdown 的得分（位階、外資、止跌，各滿分 2 分，總分 6 分），並用 value 裡的原始數值說明為何得分。若位階在 35% 或 50% 門檻附近，要講出精確數值。未入選要說明 excluded_reason。\n- 問「這週／最近有什麼變化」時，用 get_signal_summary 的 breakout.recent_changes（進出場事件）與 discover.ranked_history（每日入選潛力股）回答；沒有事件的股票就說狀態未變。資料涵蓋近 10 個交易日，回答時說明起訖日期。個股的變化用明細裡的 history。\n- summary 有 warnings 時要提醒使用者。\n- 即時報價欄位：z＝成交價（\"-\" 表示尚無成交）、y＝昨收、o＝開盤、h＝最高、l＝最低、v＝累積成交量（張）、t＝時間、d＝日期。msgArray 中空白的那筆忽略。\n\n## 絕對不能做\n- 不給買進、賣出、加碼、停損等操作建議，不給目標價或持股比例，不預測漲跌。\n- 不用帶評價或暗示操作的字眼，例如「安全」「危險」「值得關注」「需要留意」「偏保守」「強勢／弱勢」「機會」；只陳述數字與規則（例如「距出場線 0.6%」）。\n- 回答「這週變化」時只根據工具回傳的 history 數值，不推測原因（例如不要說「因為股價反彈」）。\n- 被問「要不要買／該不該賣」時，禮貌說明你只負責解釋規則與資料，並提供該股目前的訊號狀態與依據。\n- 不回答與台股、quant-bot 無關的問題（簡短婉拒，並說明你能做什麼）。\n\n## 格式（LINE 純文字）\n- 繁體中文，口吻親切簡潔，通常 150～300 字。\n- 不要用 Markdown（不要 **粗體**、# 標題、表格）；條列用「・」，可適度使用 emoji。\n- 不需要自己加免責聲明，系統會自動附上。",
+          "maxIterations": 6
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "1f6c1f60-750b-48dc-8a7d-3c5d172e295f",
+      "name": "Gemini",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        940,
+        260
+      ],
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0.3,
+          "maxOutputTokens": 2048
+        }
+      },
+      "credentials": {
+        "googlePalmApi": {
+          "id": "zaRFi5kqulYsIVMI",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "id": "1a4d4298-faff-4d51-b80c-fef847f636a2",
+      "name": "對話記憶",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        1080,
+        260
+      ],
+      "parameters": {
+        "sessionIdType": "fromInput",
+        "sessionKey": "={{ $json.sessionId }}",
+        "contextWindowLength": 10
+      }
+    },
+    {
+      "id": "d46e0fe1-8bde-430b-8ff7-ed6fcdefb98f",
+      "name": "get_signal_summary",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1220,
+        260
+      ],
+      "parameters": {
+        "toolDescription": "取得 quant-bot 今日訊號總覽 JSON。包含：as_of 資料日期、warnings、universe（追蹤清單代號與名稱，用來把股票名稱轉成代號）、breakout（策略規則、buy/sell/hold/flat 代號清單、recent_changes 近10日進出場事件）、discover（評分規則、ranked 今日排名、ranked_history 近10日每日入選名單）。回答「今天訊號」「哪些續抱」「潛力股有哪些」「這週有什麼變化」或需要把股票名稱轉代號時使用。不需要參數。",
+        "url": "={{ $env.SIGNALS_BASE_URL }}/latest/summary.json",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      }
+    },
+    {
+      "id": "021a3fff-728f-4655-a07e-879d757dd40a",
+      "name": "get_ticker_detail",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1360,
+        260
+      ],
+      "parameters": {
+        "toolDescription": "取得單一股票的訊號明細 JSON。包含 price（收盤、252 日高低、20MA）、chips（三大法人近 1/5/20 日買賣超，單位張）、breakout（action、entry_level、exit_level、since 進場日、holding_days、pct_above_exit_level、history 近10日部位）、discover（eligible、score、excluded_reason、breakdown 各項得分與原始數值、history 近10日分數）。回答「為什麼續抱 X」「X 為什麼幾分」「X 位階多少」「X 最近變化」時使用。參數 code 是 4 位數台股代號。",
+        "url": "={{ $env.SIGNALS_BASE_URL }}/latest/tickers/{{ $fromAI('code', '4 位數台股代號，例如 2330', 'string') }}.json",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      }
+    },
+    {
+      "id": "5ac94cf3-c3f7-4eb5-b1e7-1a25a05026e2",
+      "name": "get_realtime_quote",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1500,
+        260
+      ],
+      "parameters": {
+        "toolDescription": "查詢台股即時報價（證交所 MIS，上市與上櫃都可查）。回傳 msgArray，其中有資料的那筆欄位：z 成交價、y 昨收、o 開、h 高、l 低、v 累積成交量（張）、n 名稱、d 日期、t 時間。回答「現在價格」「今天漲跌」時使用。參數 code 是 4 位數台股代號。",
+        "url": "=https://mis.twse.com.tw/stock/api/getStockInfo.jsp?json=1&delay=0&ex_ch=tse_{{ $fromAI('code', '4 位數台股代號，例如 2330', 'string') }}.tw%7Cotc_{{ $fromAI('code', '4 位數台股代號，例如 2330', 'string') }}.tw",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      }
+    },
+    {
+      "id": "6b16fcf6-116f-4483-bbda-8f6a421a7c5a",
+      "name": "整理回覆",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        -60
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// LINE 不支援 Markdown：去掉 **、#、` 等符號；限制長度；固定附上免責聲明\nlet text = String($json.output ?? '').trim();\ntext = text\n  .replace(/\\*\\*(.+?)\\*\\*/g, '$1')\n  .replace(/^#+\\s*/gm, '')\n  .replace(/`/g, '')\n  .replace(/^\\s*[-*]\\s+/gm, '・');\nif (!text) text = '小精靈這次想不出答案，請換個問法再試一次 🙏';\nif (text.length > 4500) text = text.slice(0, 4500) + '…（內容過長已截斷）';\nreturn {\n  json: {\n    replyToken: $('整理輸入').item.json.replyToken,\n    text: text + '\\n\\n※ 小精靈只解釋 quant-bot 的規則型訊號，僅供參考，非投資建議。',\n  },\n};"
+      }
+    },
+    {
+      "id": "d854a84b-e390-402e-bc1d-fb272d62ec77",
+      "name": "降級回覆",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        120
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// AI Agent 失敗（模型逾時、額度用完、工具錯誤）時的降級回覆\nreturn {\n  json: {\n    replyToken: $('整理輸入').item.json.replyToken,\n    text: '小精靈暫時無法回答（AI 服務忙碌或資料讀取失敗），請稍後再試 🙏',\n  },\n};"
+      }
+    },
+    {
+      "id": "fc67b4c9-c71c-45f4-83fa-c36c1bba0977",
+      "name": "LINE Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1740,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/reply",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ replyToken: $json.replyToken, messages: [{ type: 'text', text: $json.text }] }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "hEfjdqV0KBEEzSHk",
+          "name": "Header Auth account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "LINE Webhook": {
+      "main": [
+        [
+          {
+            "node": "回應 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "回應 200": {
+      "main": [
+        [
+          {
+            "node": "拆開 events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "拆開 events": {
+      "main": [
+        [
+          {
+            "node": "只留文字訊息",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "只留文字訊息": {
+      "main": [
+        [
+          {
+            "node": "整理輸入",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "整理輸入": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "顯示輸入中",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "整理回覆",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "降級回覆",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "整理回覆": {
+      "main": [
+        [
+          {
+            "node": "LINE Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "降級回覆": {
+      "main": [
+        [
+          {
+            "node": "LINE Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "對話記憶": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_signal_summary": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_ticker_detail": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_realtime_quote": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false
+}

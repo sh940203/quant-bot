@@ -12,6 +12,8 @@ services:
       - TZ=Asia/Taipei
       - N8N_PROXY_HOPS=1        # 前面有一層 cloudflared
       - N8N_DIAGNOSTICS_ENABLED=false
+      # 讓 workflow 能用 {{ $env.SIGNALS_BASE_URL }} 讀 .env（單人自架；多人共用的 n8n 不建議開）
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
     volumes:
       - n8n_data:/home/node/.n8n
       - ./workflows:/workflows:ro
