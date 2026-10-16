@@ -3,7 +3,7 @@
   "name": "LINE AI 小精靈",
   "nodes": [
     {
-      "id": "a16720fc-8729-4772-8765-4cca80954ec2",
+      "id": "cde88cf9-c321-464d-87d0-699dfc23dc0b",
       "name": "LINE Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -22,7 +22,7 @@
       "webhookId": "0f8b271c-aa0f-4f3f-9ba9-b4b1e795987e"
     },
     {
-      "id": "0aa5753a-1714-4f17-aea4-273b9b810e49",
+      "id": "e03019ca-59bc-48dd-9c0b-8182197fffd2",
       "name": "計算簽章",
       "type": "n8n-nodes-base.crypto",
       "typeVersion": 2,
@@ -46,7 +46,7 @@
       }
     },
     {
-      "id": "72189880-8bce-4575-a041-70050af5a1bc",
+      "id": "8e6743eb-bb10-417a-8071-68f828128a71",
       "name": "簽章正確？",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -63,7 +63,7 @@
           },
           "conditions": [
             {
-              "id": "1ccb242e-166f-46de-88a3-9148ee8ef4c0",
+              "id": "e900cde6-9abb-4545-87c0-1d6ae31fa200",
               "leftValue": "={{ $json.headers['x-line-signature'] ?? '' }}",
               "operator": {
                 "type": "string",
@@ -72,7 +72,7 @@
               }
             },
             {
-              "id": "34b4cb7f-949e-4164-bfa7-34af43a31f27",
+              "id": "56f033e5-aa95-46d2-bba3-6e5076be1b89",
               "leftValue": "={{ $json.headers['x-line-signature'] }}",
               "operator": {
                 "type": "string",
@@ -87,13 +87,13 @@
       }
     },
     {
-      "id": "ff9a4acb-69bd-47ed-a8d9-f14ed066d84d",
+      "id": "f8f27b24-85d6-4cf1-8e7f-02fd60464364",
       "name": "回應 401",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
         660,
-        160
+        200
       ],
       "parameters": {
         "respondWith": "noData",
@@ -103,7 +103,7 @@
       }
     },
     {
-      "id": "3a0745cb-513a-403b-8da2-d5e6c283c68e",
+      "id": "7373969c-4945-4814-be75-55ef6a88e047",
       "name": "回應 200",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
@@ -117,7 +117,7 @@
       }
     },
     {
-      "id": "3ebe537d-c95e-4261-896d-d346c0f6ad5b",
+      "id": "1981026e-3ca6-4424-aad3-121045abb8b4",
       "name": "拆開 events",
       "type": "n8n-nodes-base.splitOut",
       "typeVersion": 1,
@@ -131,7 +131,7 @@
       }
     },
     {
-      "id": "fa11c957-24a9-40ee-b418-f246689ea211",
+      "id": "6e723d07-5d02-41be-a0ff-2c69e3e34ac7",
       "name": "只留文字訊息",
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2,
@@ -148,7 +148,7 @@
           },
           "conditions": [
             {
-              "id": "26e8d673-23c0-42a9-8d48-1b5a20ced391",
+              "id": "5dd5aab7-834f-41ec-ac95-cf6e0627f233",
               "leftValue": "={{ $json.type }}",
               "operator": {
                 "type": "string",
@@ -157,7 +157,7 @@
               "rightValue": "message"
             },
             {
-              "id": "cf617643-9b27-448e-854b-813096466bba",
+              "id": "5236c544-7b10-44a4-938e-236e4ad59eb6",
               "leftValue": "={{ $json.message.type }}",
               "operator": {
                 "type": "string",
@@ -172,7 +172,7 @@
       }
     },
     {
-      "id": "e998cfcc-c690-4c20-a050-ad4850a04696",
+      "id": "1da2d6e6-7ff8-4955-83dd-9c89157cca4d",
       "name": "整理輸入",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -186,12 +186,12 @@
       }
     },
     {
-      "id": "fff3c50e-eeca-42dc-b136-69d6e4b4de5b",
+      "id": "b8b09570-3413-4f6b-be7d-37a2ca8169a4",
       "name": "未超過每日上限？",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        1540,
+        1560,
         -20
       ],
       "parameters": {
@@ -203,7 +203,7 @@
           },
           "conditions": [
             {
-              "id": "de3fd0c6-b147-4744-bb33-fdfb8d9a53b8",
+              "id": "c96b3ac6-84f6-40c9-9f32-3b635b159bda",
               "leftValue": "={{ $json.overLimit }}",
               "operator": {
                 "type": "boolean",
@@ -218,13 +218,13 @@
       }
     },
     {
-      "id": "4dcce672-b469-4b49-8099-e97b3bf024f4",
+      "id": "970c9458-43fe-4a63-a9d7-df105afb066c",
       "name": "顯示輸入中",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1780,
-        -240
+        1560,
+        -260
       ],
       "parameters": {
         "method": "POST",
@@ -245,32 +245,32 @@
       "onError": "continueRegularOutput"
     },
     {
-      "id": "89b276ef-5b95-428d-9bb5-38747c7296ee",
+      "id": "417944f8-f0b8-4eb1-94bc-d0ac9f99ecec",
       "name": "AI Agent",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3.1,
       "position": [
-        1780,
+        1800,
         -20
       ],
       "parameters": {
         "promptType": "define",
         "text": "={{ $json.chatInput }}",
         "options": {
-          "systemMessage": "=你是「書浩專屬投資機器人」裡的 AI 小精靈，負責用白話解釋 quant-bot 每天產生的台股規則型訊號。\n現在時間（台北）：{{ $now.setZone('Asia/Taipei').toFormat('yyyy-MM-dd HH:mm') }}\n\n## 你能用的工具\n1. get_signal_summary：今日總覽（breakout 買進/出場/續抱/空手、低價潛力股排名、評分規則、追蹤清單的代號與名稱、資料日期 as_of、warnings）\n2. get_ticker_detail：單一股票明細（價量、三大法人、breakout 判斷依據、潛力股評分明細與未入選原因、近 10 個交易日變化）\n3. get_realtime_quote：證交所/櫃買即時報價（盤中延遲數秒；收盤後為當日收盤）\n\n## 回答規則\n- 每一則新問題都要先呼叫工具取得最新資料再回答；即使先前對話出現過，也不可憑記憶回答數字或訊號狀態。對話記憶只用來理解「它」「那檔」指的是哪一檔股票。\n- 數字一律來自工具結果，不可自行推測或編造。回答時註明資料日期（as_of）。\n- 使用者用股票名稱（如「智原」）時，先用 get_signal_summary 的 universe 找到代號，再查明細。\n- get_ticker_detail 回傳錯誤或找不到時，代表該股不在 quant-bot 追蹤清單；可改用 get_realtime_quote 提供報價，並說明沒有訊號資料。\n- JSON 中的比例欄位是 0~1 的小數（pctile、change_pct、pct_above_exit_level、return_since_entry），回答時換成百分比、保留 1 位小數。籌碼單位是「張」。\n- breakout 每日推播只涵蓋 summary.breakout.tickers 這 6 檔（明細中 in_breakout_basket=true）。其他股票明細裡的 breakout 欄位只是「套用同一規則的參考狀態」，不是 quant-bot 發出的訊號：不可說它「觸發進場/出場訊號」，要說「若套用 breakout 規則，目前會是…，但它不在每日推播清單」。\n- 解釋 breakout：進場＝收盤 ≥ 近 20 日最高收盤；出場＝收盤 ≤ 近 10 日最低收盤；續抱＝已進場且未跌破出場線。說明 entry_level、exit_level、進場日 since、距出場線多少。\n- 解釋潛力股分數：逐項列出 breakdown 的得分（位階、外資、止跌，各滿分 2 分，總分 6 分），並用 value 裡的原始數值說明為何得分。若位階在 35% 或 50% 門檻附近，要講出精確數值。未入選要說明 excluded_reason。\n- 問「這週／最近有什麼變化」時，用 get_signal_summary 的 breakout.recent_changes（進出場事件）與 discover.ranked_history（每日入選潛力股）回答；沒有事件的股票就說狀態未變。資料涵蓋近 10 個交易日，回答時說明起訖日期。個股的變化用明細裡的 history。\n- summary 有 warnings 時要提醒使用者。\n- 即時報價欄位：z＝成交價（\"-\" 表示尚無成交）、y＝昨收、o＝開盤、h＝最高、l＝最低、v＝累積成交量（張）、t＝時間、d＝日期。msgArray 中空白的那筆忽略。\n\n## 絕對不能做\n- 不給買進、賣出、加碼、停損等操作建議，不給目標價或持股比例，不預測漲跌。\n- 不用帶評價或暗示操作的字眼，例如「安全」「危險」「值得關注」「需要留意」「偏保守」「強勢／弱勢」「機會」；只陳述數字與規則（例如「距出場線 0.6%」）。\n- 回答「這週變化」時只根據工具回傳的 history 數值，不推測原因（例如不要說「因為股價反彈」）。\n- 被問「要不要買／該不該賣」時，禮貌說明你只負責解釋規則與資料，並提供該股目前的訊號狀態與依據。\n- 不回答與台股、quant-bot 無關的問題（簡短婉拒，並說明你能做什麼）。\n\n## 格式（LINE 純文字）\n- 繁體中文，口吻親切簡潔，通常 150～300 字。\n- 不要用 Markdown（不要 **粗體**、# 標題、表格）；條列用「・」，可適度使用 emoji。\n- 不需要自己加免責聲明，系統會自動附上。",
+          "systemMessage": "=你是「書浩專屬投資機器人」裡的 AI 小精靈，負責用白話解釋 quant-bot 每天產生的台股規則型訊號。\n現在時間（台北）：{{ $now.setZone('Asia/Taipei').toFormat('yyyy-MM-dd HH:mm') }}\n\n## 你能用的工具\n1. get_signal_summary：今日總覽（breakout 買進/出場/續抱/空手、低價潛力股排名、評分規則、追蹤清單的代號與名稱、資料日期 as_of、warnings）\n2. get_ticker_detail：單一股票明細（價量、三大法人、breakout 判斷依據、潛力股評分明細與未入選原因、近 10 個交易日變化）\n3. get_realtime_quote：證交所/櫃買即時報價（盤中延遲數秒；收盤後為當日收盤）\n\n## 回答規則\n- 每一則新問題都要先呼叫工具取得最新資料再回答；即使先前對話出現過，也不可憑記憶回答數字或訊號狀態。對話記憶只用來理解「它」「那檔」指的是哪一檔股票。\n- 數字一律來自工具結果，不可自行推測或編造。回答時註明資料日期（as_of）。\n- 使用者用股票名稱（如「智原」）時，先用 get_signal_summary 的 universe 找到代號，再查明細。\n- get_ticker_detail 回傳錯誤或找不到時，代表該股不在 quant-bot 追蹤清單；可改用 get_realtime_quote 提供報價，並說明沒有訊號資料。\n- JSON 中的比例欄位是 0~1 的小數（pctile、change_pct、pct_above_exit_level、return_since_entry），回答時換成百分比、保留 1 位小數。籌碼單位是「張」。\n- breakout 每日推播只涵蓋 summary.breakout.tickers 這 6 檔（明細中 in_breakout_basket=true）。其他股票明細裡的 breakout 欄位只是「套用同一規則的參考狀態」，不是 quant-bot 發出的訊號：不可說它「觸發進場/出場訊號」，要說「若套用 breakout 規則，目前會是…，但它不在每日推播清單」。\n- 解釋 breakout：進場＝收盤 ≥ 近 20 日最高收盤；出場＝收盤 ≤ 近 10 日最低收盤；續抱＝已進場且未跌破出場線。說明進場日 since、進場當天收盤 entry_close、進場以來報酬 return_since_entry、出場線 exit_level 與距出場線多少。注意：entry_level 是「近 20 日最高收盤＝下一次進場的門檻」，不是進場價，絕不可說成進場價位。\n- 解釋潛力股分數：逐項列出 breakdown 的得分（位階、外資、止跌，各滿分 2 分，總分 6 分），並用 value 裡的原始數值說明為何得分。若位階在 35% 或 50% 門檻附近，要講出精確數值。未入選要說明 excluded_reason。\n- 問「這週／最近有什麼變化」時，用 get_signal_summary 的 breakout.recent_changes（進出場事件）與 discover.ranked_history（每日入選潛力股）回答；沒有事件的股票就說狀態未變。資料涵蓋近 10 個交易日，回答時說明起訖日期。個股的變化用明細裡的 history。\n- summary 有 warnings 時要提醒使用者。\n- 即時報價欄位：z＝成交價（\"-\" 表示尚無成交）、y＝昨收、o＝開盤、h＝最高、l＝最低、v＝累積成交量（張）、t＝時間、d＝日期。msgArray 中空白的那筆忽略。\n\n## 絕對不能做\n- 不給買進、賣出、加碼、停損等操作建議，不給目標價或持股比例，不預測漲跌。\n- 不用帶評價或暗示操作的字眼，例如「安全」「危險」「值得關注」「需要留意」「偏保守」「強勢／弱勢」「機會」；只陳述數字與規則（例如「距出場線 0.6%」）。\n- 回答「這週變化」時只根據工具回傳的 history 數值，不推測原因（例如不要說「因為股價反彈」）。\n- 被問「要不要買／該不該賣」時，禮貌說明你只負責解釋規則與資料，並提供該股目前的訊號狀態與依據。\n- 不回答與台股、quant-bot 無關的問題（簡短婉拒，並說明你能做什麼）。\n\n## 格式（LINE 純文字）\n- 繁體中文，口吻親切簡潔，通常 150～300 字。\n- 不要用 Markdown（不要 **粗體**、# 標題、表格）；條列用「・」，可適度使用 emoji。\n- 不需要自己加免責聲明，系統會自動附上。",
           "maxIterations": 6
         }
       },
       "onError": "continueErrorOutput"
     },
     {
-      "id": "681f6a4d-74c2-47a9-93a2-0e8dc62601ca",
+      "id": "ce67bdbc-9dca-478c-984f-ba4adac179d2",
       "name": "超過上限回覆",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2180,
-        360
+        1840,
+        -260
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
@@ -278,13 +278,13 @@
       }
     },
     {
-      "id": "c79a66fd-557f-4e9e-976c-60bfdd89e36c",
+      "id": "d318cb3a-5d1d-43a1-82f6-e80b28468d94",
       "name": "Gemini",
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1.2,
       "position": [
-        1620,
-        260
+        1640,
+        300
       ],
       "parameters": {
         "modelName": "models/gemini-2.5-flash",
@@ -301,13 +301,13 @@
       }
     },
     {
-      "id": "08b13cca-6aba-4183-9aea-9c64293425ed",
+      "id": "3032b6f1-59b1-4f9c-a90a-de4e95a868ce",
       "name": "對話記憶",
       "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
       "typeVersion": 1.4,
       "position": [
-        1760,
-        260
+        1820,
+        300
       ],
       "parameters": {
         "sessionIdType": "fromInput",
@@ -316,13 +316,13 @@
       }
     },
     {
-      "id": "ed4a9a5a-d505-4345-a0aa-a9e3bf61e8a4",
+      "id": "a6ea0edb-969a-451b-84b4-efab89dbda1f",
       "name": "get_signal_summary",
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.2,
       "position": [
-        1900,
-        260
+        2000,
+        300
       ],
       "parameters": {
         "toolDescription": "取得 quant-bot 今日訊號總覽 JSON。包含：as_of 資料日期、warnings、universe（追蹤清單代號與名稱，用來把股票名稱轉成代號）、breakout（策略規則、buy/sell/hold/flat 代號清單、recent_changes 近10日進出場事件）、discover（評分規則、ranked 今日排名、ranked_history 近10日每日入選名單）。回答「今天訊號」「哪些續抱」「潛力股有哪些」「這週有什麼變化」或需要把股票名稱轉代號時使用。不需要參數。",
@@ -338,16 +338,16 @@
       }
     },
     {
-      "id": "249407be-b908-459b-9370-09f3dcb4c88f",
+      "id": "f35e0cc5-bd07-4a7f-a8ac-b78219f2787c",
       "name": "get_ticker_detail",
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.2,
       "position": [
-        2040,
-        260
+        2200,
+        300
       ],
       "parameters": {
-        "toolDescription": "取得單一股票的訊號明細 JSON。包含 price（收盤、252 日高低、20MA）、chips（三大法人近 1/5/20 日買賣超，單位張）、breakout（action、entry_level、exit_level、since 進場日、holding_days、pct_above_exit_level、history 近10日部位）、discover（eligible、score、excluded_reason、breakdown 各項得分與原始數值、history 近10日分數）。回答「為什麼續抱 X」「X 為什麼幾分」「X 位階多少」「X 最近變化」時使用。參數 code 是 4 位數台股代號。",
+        "toolDescription": "取得單一股票的訊號明細 JSON。包含 price（收盤、252 日高低、20MA）、chips（三大法人近 1/5/20 日買賣超，單位張）、breakout（action、since 進場日、entry_close 進場當天收盤、return_since_entry、holding_days、exit_level 出場線、pct_above_exit_level、entry_level 近20日最高收盤（再進場門檻，不是進場價）、history 近10日部位）、discover（eligible、score、excluded_reason、breakdown 各項得分與原始數值、history 近10日分數）。回答「為什麼續抱 X」「X 為什麼幾分」「X 位階多少」「X 最近變化」時使用。參數 code 是 4 位數台股代號。",
         "url": "={{ $env.SIGNALS_BASE_URL }}/latest/tickers/{{ $fromAI('code', '4 位數台股代號，例如 2330', 'string') }}.json",
         "options": {
           "response": {
@@ -360,13 +360,13 @@
       }
     },
     {
-      "id": "78ede5f3-4466-4592-8452-c1f7821a31c0",
+      "id": "83254a91-2168-4b94-b2c1-6e55dd375e24",
       "name": "get_realtime_quote",
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.2,
       "position": [
-        2180,
-        260
+        2400,
+        300
       ],
       "parameters": {
         "toolDescription": "查詢台股即時報價（證交所 MIS，上市與上櫃都可查）。回傳 msgArray，其中有資料的那筆欄位：z 成交價、y 昨收、o 開、h 高、l 低、v 累積成交量（張）、n 名稱、d 日期、t 時間。回答「現在價格」「今天漲跌」時使用。參數 code 是 4 位數台股代號。",
@@ -382,13 +382,13 @@
       }
     },
     {
-      "id": "02ea7c25-ec18-45ad-9b4d-8bae96749d96",
+      "id": "03a75a72-2c05-4b6b-8e45-013fc104da6c",
       "name": "整理回覆",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2180,
-        -80
+        2200,
+        -100
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
@@ -396,12 +396,12 @@
       }
     },
     {
-      "id": "da2de8d8-50a9-4b5b-98c6-50ffda7e0be0",
+      "id": "3fee7afb-9dd5-496a-a358-f58488fb5ff8",
       "name": "降級回覆",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2180,
+        2200,
         100
       ],
       "parameters": {
@@ -410,12 +410,12 @@
       }
     },
     {
-      "id": "d687a7c8-d150-4d35-8303-44e739b7e8db",
+      "id": "ac38d5b5-5cce-405f-b30e-edd630832795",
       "name": "LINE Reply",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2420,
+        2480,
         -20
       ],
       "parameters": {
@@ -517,6 +517,11 @@
             "node": "未超過每日上限？",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "顯示輸入中",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -526,11 +531,6 @@
         [
           {
             "node": "AI Agent",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "顯示輸入中",
             "type": "main",
             "index": 0
           }

@@ -3,7 +3,7 @@
   "name": "LINE 小精靈錯誤通知",
   "nodes": [
     {
-      "id": "76486485-b076-4445-a8e4-12995becb7ac",
+      "id": "e1d85c6c-19e8-4462-95fc-4d4ecc5d666b",
       "name": "錯誤觸發",
       "type": "n8n-nodes-base.errorTrigger",
       "typeVersion": 1,
@@ -14,7 +14,7 @@
       "parameters": {}
     },
     {
-      "id": "6c84ea07-72eb-4b5b-af0a-56a6a86473cf",
+      "id": "64828892-f876-45f6-a738-a91171f2515b",
       "name": "整理錯誤訊息",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -28,7 +28,7 @@
       }
     },
     {
-      "id": "d2828600-4248-422d-bc84-bd5e9655df76",
+      "id": "eb26d72f-5a81-4253-be66-c830a25f9e1d",
       "name": "Push 給管理員",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
