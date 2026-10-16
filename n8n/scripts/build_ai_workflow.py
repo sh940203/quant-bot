@@ -36,7 +36,7 @@ SYSTEM_PROMPT = """你是「書浩專屬投資機器人」裡的 AI 小精靈，
 - get_ticker_detail 回傳錯誤或找不到時，代表該股不在 quant-bot 追蹤清單；可改用 get_realtime_quote 提供報價，並說明沒有訊號資料。
 - JSON 中的比例欄位是 0~1 的小數（pctile、change_pct、pct_above_exit_level、return_since_entry），回答時換成百分比、保留 1 位小數。籌碼單位是「張」。
 - breakout 每日推播只涵蓋 summary.breakout.tickers 這 6 檔（明細中 in_breakout_basket=true）。其他股票明細裡的 breakout 欄位只是「套用同一規則的參考狀態」，不是 quant-bot 發出的訊號：不可說它「觸發進場/出場訊號」，要說「若套用 breakout 規則，目前會是…，但它不在每日推播清單」。
-- 解釋 breakout：進場＝收盤 ≥ 近 20 日最高收盤；出場＝收盤 ≤ 近 10 日最低收盤；續抱＝已進場且未跌破出場線。說明 entry_level、exit_level、進場日 since、距出場線多少。
+- 解釋 breakout：進場＝收盤 ≥ 近 20 日最高收盤；出場＝收盤 ≤ 近 10 日最低收盤；續抱＝已進場且未跌破出場線。說明進場日 since、進場當天收盤 entry_close、進場以來報酬 return_since_entry、出場線 exit_level 與距出場線多少。注意：entry_level 是「近 20 日最高收盤＝下一次進場的門檻」，不是進場價，絕不可說成進場價位。
 - 解釋潛力股分數：逐項列出 breakdown 的得分（位階、外資、止跌，各滿分 2 分，總分 6 分），並用 value 裡的原始數值說明為何得分。若位階在 35% 或 50% 門檻附近，要講出精確數值。未入選要說明 excluded_reason。
 - 問「這週／最近有什麼變化」時，用 get_signal_summary 的 breakout.recent_changes（進出場事件）與 discover.ranked_history（每日入選潛力股）回答；沒有事件的股票就說狀態未變。資料涵蓋近 10 個交易日，回答時說明起訖日期。個股的變化用明細裡的 history。
 - summary 有 warnings 時要提醒使用者。
@@ -59,7 +59,7 @@ SUMMARY_DESC = ("取得 quant-bot 今日訊號總覽 JSON。包含：as_of 資�
                 "discover（評分規則、ranked 今日排名、ranked_history 近10日每日入選名單）。"
                 "回答「今天訊號」「哪些續抱」「潛力股有哪些」「這週有什麼變化」或需要把股票名稱轉代號時使用。不需要參數。")
 DETAIL_DESC = ("取得單一股票的訊號明細 JSON。包含 price（收盤、252 日高低、20MA）、chips（三大法人近 1/5/20 日買賣超，單位張）、"
-               "breakout（action、entry_level、exit_level、since 進場日、holding_days、pct_above_exit_level、history 近10日部位）、"
+               "breakout（action、since 進場日、entry_close 進場當天收盤、return_since_entry、holding_days、exit_level 出場線、pct_above_exit_level、entry_level 近20日最高收盤（再進場門檻，不是進場價）、history 近10日部位）、"
                "discover（eligible、score、excluded_reason、breakdown 各項得分與原始數值、history 近10日分數）。"
                "回答「為什麼續抱 X」「X 為什麼幾分」「X 位階多少」「X 最近變化」時使用。參數 code 是 4 位數台股代號。")
 QUOTE_DESC = ("查詢台股即時報價（證交所 MIS，上市與上櫃都可查）。回傳 msgArray，其中有資料的那筆欄位：z 成交價、y 昨收、o 開、h 高、l 低、"

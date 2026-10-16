@@ -6,3 +6,4 @@ paper_state.json
 .pytest_cache/
 out/
 n8n/.env
+.DS_Store
