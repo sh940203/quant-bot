@@ -172,7 +172,7 @@ nodes = [
     node("簽章正確？", "n8n-nodes-base.if", 2.2, [440, 0], conditions(
         cond("={{ $json.headers['x-line-signature'] ?? '' }}", "notEmpty"),
         cond("={{ $json.headers['x-line-signature'] }}", "equals", "={{ $json.expectedSignature }}"))),
-    respond("回應 401", [660, 160], 401),
+    respond("回應 401", [660, 200], 401),
     respond("回應 200", [660, -20], 200),
     node("拆開 events", "n8n-nodes-base.splitOut", 1, [880, -20],
          {"fieldToSplitOut": "body.events", "options": {}}),
@@ -181,38 +181,38 @@ nodes = [
         cond("={{ $json.message.type }}", "equals", "text"))),
     node("整理輸入", "n8n-nodes-base.code", 2, [1320, -20],
          {"mode": "runOnceForEachItem", "jsCode": CODE_PREPARE}),
-    node("未超過每日上限？", "n8n-nodes-base.if", 2.2, [1540, -20], conditions(
+    node("未超過每日上限？", "n8n-nodes-base.if", 2.2, [1560, -20], conditions(
         cond("={{ $json.overLimit }}", "false", type_="boolean"))),
-    node("顯示輸入中", "n8n-nodes-base.httpRequest", 4.2, [1780, -240], {
+    node("顯示輸入中", "n8n-nodes-base.httpRequest", 4.2, [1560, -260], {
         "method": "POST", "url": "https://api.line.me/v2/bot/chat/loading/start",
         "authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth",
         "sendBody": True, "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ chatId: $json.sessionId, loadingSeconds: 20 }) }}",
         "options": {}}, credentials=CRED_LINE, onError="continueRegularOutput"),
-    node("AI Agent", "@n8n/n8n-nodes-langchain.agent", 3.1, [1780, -20], {
+    node("AI Agent", "@n8n/n8n-nodes-langchain.agent", 3.1, [1800, -20], {
         "promptType": "define", "text": "={{ $json.chatInput }}",
         "options": {"systemMessage": "=" + SYSTEM_PROMPT, "maxIterations": 6}},
         onError="continueErrorOutput"),
-    node("超過上限回覆", "n8n-nodes-base.code", 2, [2180, 360],
+    node("超過上限回覆", "n8n-nodes-base.code", 2, [1840, -260],
          {"mode": "runOnceForEachItem", "jsCode": CODE_OVER_LIMIT}),
-    node("Gemini", "@n8n/n8n-nodes-langchain.lmChatGoogleGemini", 1.2, [1620, 260], {
+    node("Gemini", "@n8n/n8n-nodes-langchain.lmChatGoogleGemini", 1.2, [1640, 300], {
         "modelName": "models/gemini-2.5-flash",
         "options": {"temperature": 0.3, "maxOutputTokens": 2048}}, credentials=CRED_GEMINI),
-    node("對話記憶", "@n8n/n8n-nodes-langchain.memoryBufferWindow", 1.4, [1760, 260],
+    node("對話記憶", "@n8n/n8n-nodes-langchain.memoryBufferWindow", 1.4, [1820, 300],
          {"sessionIdType": "fromInput", "sessionKey": "={{ $json.sessionId }}", "contextWindowLength": 10}),
-    tool("get_signal_summary", [1900, 260],
+    tool("get_signal_summary", [2000, 300],
          "={{ $env.SIGNALS_BASE_URL }}/latest/summary.json", SUMMARY_DESC),
-    tool("get_ticker_detail", [2040, 260],
+    tool("get_ticker_detail", [2200, 300],
          "={{ $env.SIGNALS_BASE_URL }}/latest/tickers/{{ $fromAI('code', '4 位數台股代號，例如 2330', 'string') }}.json",
          DETAIL_DESC),
-    tool("get_realtime_quote", [2180, 260],
+    tool("get_realtime_quote", [2400, 300],
          "=https://mis.twse.com.tw/stock/api/getStockInfo.jsp?json=1&delay=0&ex_ch=tse_{{ $fromAI('code', '4 位數台股代號，例如 2330', 'string') }}.tw%7Cotc_{{ $fromAI('code', '4 位數台股代號，例如 2330', 'string') }}.tw",
          QUOTE_DESC),
-    node("整理回覆", "n8n-nodes-base.code", 2, [2180, -80],
+    node("整理回覆", "n8n-nodes-base.code", 2, [2200, -100],
          {"mode": "runOnceForEachItem", "jsCode": CODE_FORMAT}),
-    node("降級回覆", "n8n-nodes-base.code", 2, [2180, 100],
+    node("降級回覆", "n8n-nodes-base.code", 2, [2200, 100],
          {"mode": "runOnceForEachItem", "jsCode": CODE_FALLBACK}),
-    node("LINE Reply", "n8n-nodes-base.httpRequest", 4.2, [2420, -20], {
+    node("LINE Reply", "n8n-nodes-base.httpRequest", 4.2, [2480, -20], {
         "method": "POST", "url": "https://api.line.me/v2/bot/message/reply",
         "authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth",
         "sendBody": True, "specifyBody": "json",
@@ -232,8 +232,8 @@ connections = {
     "回應 200": {"main": [main("拆開 events")]},
     "拆開 events": {"main": [main("只留文字訊息")]},
     "只留文字訊息": {"main": [main("整理輸入")]},
-    "整理輸入": {"main": [main("未超過每日上限？")]},
-    "未超過每日上限？": {"main": [main("AI Agent", "顯示輸入中"), main("超過上限回覆")]},
+    "整理輸入": {"main": [main("未超過每日上限？", "顯示輸入中")]},
+    "未超過每日上限？": {"main": [main("AI Agent"), main("超過上限回覆")]},
     "AI Agent": {"main": [main("整理回覆"), main("降級回覆")]},
     "整理回覆": {"main": [main("LINE Reply")]},
     "降級回覆": {"main": [main("LINE Reply")]},
